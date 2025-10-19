@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head><title>Admin Panel</title></head>
+<body>
+<h1>Transactions</h1>
+<table border="1">
+<tr><th>Correlation ID</th><th>Sender</th><th>Receiver</th><th>Amount</th><th>Status</th><th>Alerts</th></tr>
+{% for tx in transactions %}
+<tr>
+<td>{{tx.correlation_id}}</td>
+<td>{{tx.sender_account}}</td>
+<td>{{tx.receiver_account}}</td>
+<td>{{tx.amount}}</td>
+<td>{{tx.status}}</td>
+<td>{{tx.alerts}}</td>
+</tr>
+{% endfor %}
+</table>
+
+<h1>Rules</h1>
+<table border="1">
+<tr><th>ID</th><th>Name</th><th>Type</th><th>Enabled</th><th>Params</th></tr>
+{% for rule in rules %}
+<tr>
+<td>{{rule.id}}</td>
+<td>{{rule.name}}</td>
+<td>{{rule.rule_type}}</td>
+<td>{{rule.enabled}}</td>
+<td>{{rule.params}}</td>
+</tr>
+{% endfor %}
+</table>
+</body>
+</html>
