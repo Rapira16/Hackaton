@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class TransactionIn(BaseModel):
-    # JSON-схема входа для транзакции (ранее использовались Form-поля)
     sender_account: str = Field(..., min_length=1)
     receiver_account: str = Field(..., min_length=1)
     amount: float = Field(..., gt=0)
@@ -22,7 +21,6 @@ class TransactionIn(BaseModel):
 
 
 class RuleIn(BaseModel):
-    # JSON-схема входа для добавления правила (замена Form на JSON)
     name: str
     rule_type: str
     value: float = 0
@@ -34,7 +32,6 @@ ALLOWED_TYPES = ["payment", "withdrawal", "transfer"]
 
 @app.post("/transactions")
 async def create_transaction(payload: TransactionIn):
-    # Эндпоинт принимает JSON-тело, валидированное Pydantic-моделью TransactionIn
     if payload.transaction_type not in ALLOWED_TYPES or payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid data")
     tx = Transaction(payload.sender_account, payload.receiver_account, payload.amount, payload.transaction_type)
@@ -47,7 +44,6 @@ async def admin_panel(request: Request):
 
 @app.post("/rules/add")
 async def add_rule(payload: RuleIn):
-    # Эндпоинт принимает JSON-тело для создания правила (name, rule_type, value)
     params = {"value": payload.value}
     rule = Rule(payload.name, payload.rule_type, params=params)
     rules.append(rule)
