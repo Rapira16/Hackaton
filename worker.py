@@ -1,5 +1,6 @@
 import threading, time, json
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 from models import TransactionDB, RuleDB
 from rules_engine import threshold_rule, pattern_rule, composite_rule, ml_rule
@@ -7,6 +8,7 @@ from notifications import send_telegram_alert
 from logger import log_event
 
 queue = []
+
 
 class Transaction:
     def __init__(self, sender_account, receiver_account, amount, transaction_type):
@@ -20,9 +22,20 @@ class Transaction:
         self.status = "processed"
         self.alerts = []
 
+
 def process_transaction(tx):
     session = SessionLocal()
     try:
+        # Проверяем дубликат еще раз на случай race condition
+        existing_tx = session.query(TransactionDB).filter(
+            TransactionDB.correlation_id == tx.correlation_id
+        ).first()
+
+        if existing_tx:
+            log_event("duplicate_skipped", tx, component="queue",
+                      extra={"level": "WARN", "reason": "duplicate_in_db"})
+            return
+
         db_rules = session.query(RuleDB).filter(RuleDB.enabled == True).all()
         history_transactions = session.query(TransactionDB).all()
         alerts = []
@@ -63,11 +76,17 @@ def process_transaction(tx):
         for reason in alerts:
             send_telegram_alert(tx, reason)
 
+    except IntegrityError as e:
+        session.rollback()
+        log_event("db_integrity_error", tx, component="queue",
+                  extra={"error": str(e), "level": "ERROR", "reason": "duplicate_constraint"})
     except Exception as e:
         session.rollback()
-        log_event("db_error", tx, component="queue", extra={"error": str(e), "level": "ERROR"})
+        log_event("db_error", tx, component="queue",
+                  extra={"error": str(e), "level": "ERROR"})
     finally:
         session.close()
+
 
 def worker():
     while True:
@@ -76,5 +95,6 @@ def worker():
             log_event("start_processing", tx, component="queue")
             process_transaction(tx)
         time.sleep(0.1)
+
 
 threading.Thread(target=worker, daemon=True).start()

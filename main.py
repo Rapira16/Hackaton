@@ -26,16 +26,45 @@ async def create_transaction(payload: TransactionIn):
     if payload.transaction_type not in ALLOWED_TYPES or payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid data")
 
+    # Создаем транзакцию
     tx = Transaction(
         sender_account=payload.sender_account,
         receiver_account=payload.receiver_account,
         amount=payload.amount,
         transaction_type=payload.transaction_type,
     )
+
+    # Проверяем на дубликат correlation_id в БД
+    session = SessionLocal()
+    try:
+        existing_tx = session.query(TransactionDB).filter(
+            TransactionDB.correlation_id == tx.correlation_id
+        ).first()
+
+        if existing_tx:
+            log_event("duplicate_rejected", tx, component="ingest",
+                      extra={"level": "WARN", "reason": "duplicate_correlation_id"})
+            raise HTTPException(
+                status_code=409,
+                detail=f"Transaction with correlation_id {tx.correlation_id} already exists"
+            )
+    finally:
+        session.close()
+
+    # Проверяем на дубликат в очереди
+    duplicate_in_queue = any(queued_tx.correlation_id == tx.correlation_id for queued_tx in queue)
+    if duplicate_in_queue:
+        log_event("duplicate_rejected", tx, component="ingest",
+                  extra={"level": "WARN", "reason": "duplicate_in_queue"})
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transaction with correlation_id {tx.correlation_id} is already in queue"
+        )
+
+    # Добавляем в очередь
     queue.append(tx)
     log_event("queued", tx, component="ingest")
     return {"status": "queued", "correlation_id": tx.correlation_id}
-
 
 @app.post("/rules/add")
 async def add_rule(payload: RuleIn):
