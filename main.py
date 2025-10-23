@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import create_engine, Column, String, Float, Boolean, DateTime, Text, Integer
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timedelta
-import threading, time, uuid, json, uvicorn, requests, logging, csv
+import threading, time, uuid, json, requests, logging, csv
 from io import StringIO
 
 # -------------------- Логирование --------------------
@@ -144,9 +144,77 @@ class Transaction:
         self.status = "processed"
         self.alerts = []
 
+# -------------------- Правила --------------------
+def threshold_rule(tx, params):
+    field = params.get("field", "amount")
+    op = params.get("operator", ">")
+    value = params.get("value", 100000)
+    val = getattr(tx, field, 0)
+    if op == ">" and val > value:
+        return True, f"{field} {val} > {value}"
+    if op == ">=" and val >= value:
+        return True, f"{field} {val} >= {value}"
+    if op == "<" and val < value:
+        return True, f"{field} {val} < {value}"
+    if op == "<=" and val <= value:
+        return True, f"{field} {val} <= {value}"
+    if op == "==" and val == value:
+        return True, f"{field} {val} == {value}"
+    if op == "!=" and val != value:
+        return True, f"{field} {val} != {value}"
+    return False, ""
+
+def pattern_rule(tx, params, history):
+    N = params.get("N", 3)
+    T = params.get("minutes", 5)
+    recent = [t for t in history if t.sender_account == tx.sender_account and
+              t.timestamp > datetime.utcnow() - timedelta(minutes=T)]
+    if len(recent) >= N:
+        return True, f"{len(recent)} tx in last {T} min"
+    return False, ""
+
+def composite_rule(tx, params, history):
+    t_alert, t_msg = threshold_rule(tx, params.get("threshold", {}))
+    p_alert, p_msg = pattern_rule(tx, params.get("pattern", {}), history)
+    if t_alert and p_alert:
+        return True, f"Composite Alert: {t_msg} + {p_msg}"
+    return False, ""
+
+def ml_rule(tx, params):
+    threshold = params.get("threshold", 0.8)
+    prob = min(tx.amount / 200000, 1.0)
+    if prob > threshold:
+        return True, f"ML probability {prob:.2f} > {threshold}"
+    return False, ""
+
+# -------------------- Обработка транзакции --------------------
 def process_transaction(tx):
     session = SessionLocal()
     try:
+        db_rules = session.query(RuleDB).filter(RuleDB.enabled==True).all()
+        history_transactions = session.query(TransactionDB).all()
+        alerts = []
+
+        for rule in db_rules:
+            params = json.loads(rule.params)
+            if rule.rule_type == "threshold":
+                alert, reason = threshold_rule(tx, params)
+            elif rule.rule_type == "pattern":
+                alert, reason = pattern_rule(tx, params, history_transactions)
+            elif rule.rule_type == "composite":
+                alert, reason = composite_rule(tx, params, history_transactions)
+            elif rule.rule_type == "ml":
+                alert, reason = ml_rule(tx, params)
+            else:
+                continue
+            if alert:
+                alerts.append(reason)
+
+        tx.alerts = alerts
+        if alerts:
+            tx.status = "alerted"
+
+        # Сохраняем в БД с alerts
         tx_record = TransactionDB(
             correlation_id=tx.correlation_id,
             sender_account=tx.sender_account,
@@ -160,7 +228,11 @@ def process_transaction(tx):
         session.add(tx_record)
         session.commit()
         log_event("db_commit", tx, component="queue")
-        send_telegram_alert(tx, "Transaction processed")
+
+        # После коммита — уведомления
+        for reason in alerts:
+            send_telegram_alert(tx, reason)
+
     except Exception as e:
         session.rollback()
         log_event("db_error", tx, component="queue", extra={"error": str(e), "level": "ERROR"})
@@ -196,7 +268,12 @@ async def create_transaction(payload: TransactionIn):
 async def add_rule(payload: RuleIn):
     session = SessionLocal()
     try:
-        params = json.dumps({"value": payload.value})
+        # 👇 Добавляем правильную структуру для threshold_rule
+        params = json.dumps({
+            "field": "amount",
+            "operator": ">",
+            "value": payload.value
+        })
         rule = RuleDB(
             id=str(uuid.uuid4()),
             name=payload.name,
@@ -206,18 +283,21 @@ async def add_rule(payload: RuleIn):
         )
         session.add(rule)
         session.commit()
-        # Логируем историю
         history = RuleHistory(
             rule_id=rule.id,
             action="create",
-            new_values=json.dumps({"name": rule.name, "rule_type": rule.rule_type, "params": params})
+            new_values=json.dumps({
+                "name": rule.name,
+                "rule_type": rule.rule_type,
+                "params": params
+            })
         )
         session.add(history)
         session.commit()
-        log_event("rule_added", tx=Transaction("system","system",0,"system"), component="rules", extra={"rule_name": payload.name})
         return {"status": "ok", "rule_id": rule.id}
     finally:
         session.close()
+
 
 @app.post("/rules/edit/{rule_id}")
 async def edit_rule(rule_id: str, payload: RuleIn):
@@ -323,5 +403,6 @@ async def export_csv():
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition":"attachment; filename=transactions.csv"})
 
 if __name__ == "__main__":
+    import uvicorn
     print("✅ Starting FastAPI Fraud Detection System...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
