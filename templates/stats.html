@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Statistics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<h1>Transaction Statistics</h1>
+
+<ul>
+    <li>Total transactions: {{ total }}</li>
+    <li>Processed: {{ processed }}</li>
+    <li>Alerted: {{ alerted }}</li>
+</ul>
+
+<canvas id="txChart" width="400" height="200"></canvas>
+
+<script>
+const ctx = document.getElementById('txChart').getContext('2d');
+const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['Processed', 'Alerted'],
+        datasets: [{
+            label: 'Transactions',
+            data: [{{ processed }}, {{ alerted }}],
+            backgroundColor: ['#4caf50', '#f44336']
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Transaction Overview' }
+        }
+    }
+});
+</script>
+
+<a href="/admin" class="btn">Back</a>
+</body>
+</html>

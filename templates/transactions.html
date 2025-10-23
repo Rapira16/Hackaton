@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transactions</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px; }
+        th { background-color: #eee; }
+        .btn { padding: 4px 8px; border: 1px solid #aaa; border-radius: 4px; margin-right: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<h1>Transactions</h1>
+
+<form method="get">
+    Status:
+    <select name="status">
+        <option value="">All</option>
+        <option value="processed" {% if status=="processed" %}selected{% endif %}>Processed</option>
+        <option value="alerted" {% if status=="alerted" %}selected{% endif %}>Alerted</option>
+    </select>
+    <button type="submit" class="btn">Filter</button>
+</form>
+
+<table>
+    <tr>
+        <th>Correlation ID</th>
+        <th>Sender</th>
+        <th>Receiver</th>
+        <th>Amount</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Details</th>
+    </tr>
+    {% for tx in transactions %}
+    <tr>
+        <td>{{ tx.correlation_id }}</td>
+        <td>{{ tx.sender_account }}</td>
+        <td>{{ tx.receiver_account }}</td>
+        <td>{{ tx.amount }}</td>
+        <td>{{ tx.transaction_type }}</td>
+        <td>{{ tx.status }}</td>
+        <td><a href="/admin/transaction/{{ tx.correlation_id }}">View</a></td>
+    </tr>
+    {% endfor %}
+</table>
+
+<p>Page {{ page }} of {{ (total // per_page) + 1 }}</p>
+{% if page > 1 %}
+    <a href="?page={{ page-1 }}{% if status %}&status={{ status }}{% endif %}">Previous</a>
+{% endif %}
+{% if page*per_page < total %}
+    <a href="?page={{ page+1 }}{% if status %}&status={{ status }}{% endif %}">Next</a>
+{% endif %}
+
+<a href="/admin" class="btn">Back</a>
+</body>
+</html>

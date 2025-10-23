@@ -1,34 +1,64 @@
 <!DOCTYPE html>
 <html>
-<head><title>Admin Panel</title></head>
+<head>
+    <title>Admin Panel</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f0f0f0; }
+        a { text-decoration: none; color: blue; }
+        .btn { padding: 4px 8px; border: 1px solid #aaa; border-radius: 4px; margin-right: 4px; cursor: pointer; }
+    </style>
+</head>
 <body>
-<h1>Transactions</h1>
-<table border="1">
-<tr><th>Correlation ID</th><th>Sender</th><th>Receiver</th><th>Amount</th><th>Status</th><th>Alerts</th></tr>
-{% for tx in transactions %}
-<tr>
-<td>{{tx.correlation_id}}</td>
-<td>{{tx.sender_account}}</td>
-<td>{{tx.receiver_account}}</td>
-<td>{{tx.amount}}</td>
-<td>{{tx.status}}</td>
-<td>{{tx.alerts}}</td>
-</tr>
-{% endfor %}
+<h1>Admin Panel</h1>
+
+<h2>Rules</h2>
+<table>
+    <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Enabled</th>
+        <th>Actions</th>
+    </tr>
+    {% for rule in rules %}
+    <tr>
+        <td>{{ rule.name }}</td>
+        <td>{{ rule.rule_type }}</td>
+        <td>{{ "Yes" if rule.enabled else "No" }}</td>
+        <td>
+            <a href="/admin/edit_rule/{{ rule.id }}" class="btn">Edit</a>
+            <a href="/rules/delete/{{ rule.id }}" class="btn">Delete</a>
+        </td>
+    </tr>
+    {% endfor %}
 </table>
 
-<h1>Rules</h1>
-<table border="1">
-<tr><th>ID</th><th>Name</th><th>Type</th><th>Enabled</th><th>Params</th></tr>
-{% for rule in rules %}
-<tr>
-<td>{{rule.id}}</td>
-<td>{{rule.name}}</td>
-<td>{{rule.rule_type}}</td>
-<td>{{rule.enabled}}</td>
-<td>{{rule.params}}</td>
-</tr>
-{% endfor %}
+<h2>Last Transactions</h2>
+<table>
+    <tr>
+        <th>Correlation ID</th>
+        <th>Sender</th>
+        <th>Receiver</th>
+        <th>Amount</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Details</th>
+    </tr>
+    {% for tx in transactions %}
+    <tr>
+        <td>{{ tx.correlation_id }}</td>
+        <td>{{ tx.sender_account }}</td>
+        <td>{{ tx.receiver_account }}</td>
+        <td>{{ tx.amount }}</td>
+        <td>{{ tx.transaction_type }}</td>
+        <td>{{ tx.status }}</td>
+        <td><a href="/admin/transaction/{{ tx.correlation_id }}">View</a></td>
+    </tr>
+    {% endfor %}
 </table>
+
+<a href="/admin/stats" class="btn">Statistics</a>
+<a href="/admin/export" class="btn">Export CSV</a>
 </body>
 </html>

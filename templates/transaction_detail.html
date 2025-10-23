@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transaction Detail</title>
+    <style>
+        table { border-collapse: collapse; width: 50%; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+        th { background-color: #eee; width: 150px; }
+    </style>
+</head>
+<body>
+<h1>Transaction {{ tx.correlation_id }}</h1>
+
+<table>
+    <tr><th>Correlation ID</th><td>{{ tx.correlation_id }}</td></tr>
+    <tr><th>Sender</th><td>{{ tx.sender_account }}</td></tr>
+    <tr><th>Receiver</th><td>{{ tx.receiver_account }}</td></tr>
+    <tr><th>Amount</th><td>{{ tx.amount }}</td></tr>
+    <tr><th>Type</th><td>{{ tx.transaction_type }}</td></tr>
+    <tr><th>Status</th><td>{{ tx.status }}</td></tr>
+    <tr><th>Alerts</th><td>{{ tx.alerts }}</td></tr>
+    <tr><th>Timestamp</th><td>{{ tx.timestamp }}</td></tr>
+</table>
+
+<a href="/admin/transactions" class="btn">Back</a>
+</body>
+</html>
