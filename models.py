@@ -1,24 +1,34 @@
+from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, Integer
 from datetime import datetime
 import uuid
+from database import Base
 
-transactions = []
-rules = []
+class TransactionDB(Base):
+    __tablename__ = "transactions"
+    id = Column(Integer, primary_key=True, index=True)
+    correlation_id = Column(String, unique=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    sender_account = Column(String)
+    receiver_account = Column(String)
+    amount = Column(Float)
+    transaction_type = Column(String)
+    status = Column(String, default="processed")
+    alerts = Column(Text, default="")
 
-class Transaction:
-    def __init__(self, sender_account, receiver_account, amount, transaction_type):
-        self.correlation_id = str(uuid.uuid4())
-        self.sender_account = sender_account
-        self.receiver_account = receiver_account
-        self.amount = amount
-        self.transaction_type = transaction_type
-        self.timestamp = datetime.utcnow()
-        self.status = "processed"
-        self.alerts = []
+class RuleDB(Base):
+    __tablename__ = "rules"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String)
+    rule_type = Column(String)
+    enabled = Column(Boolean, default=True)
+    params = Column(Text)
 
-class Rule:
-    def __init__(self, name, rule_type, enabled=True, params=None):
-        self.id = str(uuid.uuid4())
-        self.name = name
-        self.rule_type = rule_type  # 'threshold', 'pattern', 'composite', 'ml'
-        self.enabled = enabled
-        self.params = params or {}
+class RuleHistory(Base):
+    __tablename__ = "rule_history"
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(String)
+    action = Column(String)
+    old_values = Column(Text, nullable=True)
+    new_values = Column(Text, nullable=True)
+    changed_by = Column(String, default="admin")
+    timestamp = Column(DateTime, default=datetime.utcnow)

@@ -29,7 +29,6 @@ def pattern_rule(tx, params, history):
     return False, ""
 
 def composite_rule(tx, params, history):
-    # Простейший AND из threshold + pattern
     t_alert, t_msg = threshold_rule(tx, params.get("threshold", {}))
     p_alert, p_msg = pattern_rule(tx, params.get("pattern", {}), history)
     if t_alert and p_alert:
@@ -37,9 +36,8 @@ def composite_rule(tx, params, history):
     return False, ""
 
 def ml_rule(tx, params):
-    # Заглушка: если amount > threshold, то вероятность fraud
     threshold = params.get("threshold", 0.8)
-    prob = min(tx.amount / 200000, 1.0)  # условная вероятность
+    prob = min(tx.amount / 200000, 1.0)
     if prob > threshold:
         return True, f"ML probability {prob:.2f} > {threshold}"
     return False, ""
