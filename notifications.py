@@ -49,20 +49,20 @@ def send_telegram_alert(tx, reason="New transaction received", retries=3):
             log_event("notify_error", tx, component="notify", extra={"attempt": attempt, "error": str(e), "level": "ERROR"})
         time.sleep(1)
 
-# Конфигурация SMTP сервера Mail.ru
-EMAIL_HOST = "smtp.mail.ru"  # SMTP сервер для отправки писем
-EMAIL_PORT = 587  # Порт для защищенного соединения
-EMAIL_USER = "bot_hackaton@mail.ru"  # Email отправителя (ваш аккаунт)
-EMAIL_PASSWORD = "lxHGo5vvjWpooIpy6GSy"  # Пароль приложения Mail.ru
-
-# Разные email адреса для отправителя и получателя:
-SENDER_EMAIL = "bot_hackaton@mail.ru"  # Email отправителя уведомлений
-RECIPIENT_EMAIL = "EnderBro_2005@mail.ru"  # Email получателя уведомлений (администратора)
-
-sent_alerts = set()  # Множество для отслеживания уже отправленных уведомлений
-
 
 def send_email_alert(tx, reason="New transaction received", retries=3):
+    # Конфигурация SMTP сервера Mail.ru
+    EMAIL_HOST = "smtp.mail.ru"  # SMTP сервер для отправки писем
+    EMAIL_PORT = 587  # Порт для защищенного соединения
+    EMAIL_USER = "bot_hackaton@mail.ru"  # Email отправителя (ваш аккаунт)
+    EMAIL_PASSWORD = "lxHGo5vvjWpooIpy6GSy"  # Пароль приложения Mail.ru
+
+    # Разные email адреса для отправителя и получателя:
+    SENDER_EMAIL = "bot_hackaton@mail.ru"  # Email отправителя уведомлений
+    RECIPIENT_EMAIL = "EnderBro_2005@mail.ru"  # Email получателя уведомлений (администратора)
+
+    sent_alerts = set()  # Множество для отслеживания уже отправленных уведомлений
+
     # Проверка на дубликаты
     if tx.correlation_id in sent_alerts:
         log_event("notify_skipped", tx, component="notify", extra={"reason": "duplicate"})
