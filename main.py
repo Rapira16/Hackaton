@@ -266,7 +266,6 @@ async def stats(request: Request):
 
 @app.get("/admin/export")
 async def export_csv():
-    """Экспорт транзакций в CSV."""
     session = SessionLocal()
     try:
         transactions = session.query(TransactionDB).all()
