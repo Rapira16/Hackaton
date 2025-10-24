@@ -26,6 +26,80 @@ def pattern_rule(tx, params, history):
               t.timestamp > datetime.utcnow() - timedelta(minutes=T)]
     if len(recent) >= N:
         return True, f"{len(recent)} tx in last {T} min"
+    
+    pattern_type = params.get("pattern_type", "basic")
+    
+    if pattern_type == "time_window_aggregate":
+        N = params.get("N", 3)
+        T = params.get("minutes", 5)
+        field = params.get("field", "amount")
+        agg_op = params.get("aggregate", "count")
+        agg_value = params.get("aggregate_value", None)
+        
+        recent = [t for t in history if t.sender_account == tx.sender_account and
+                  t.timestamp > datetime.utcnow() - timedelta(minutes=T)]
+        
+        if len(recent) < N:
+            return False, ""
+        
+        if agg_op == "count":
+            result = len(recent)
+            if result >= N:
+                return True, f"{result} tx in last {T} min"
+        
+        elif agg_op == "sum":
+            total = sum(getattr(t, field, 0) for t in recent)
+            if agg_value is not None and total >= agg_value:
+                return True, f"Total {field} {total} >= {agg_value} in last {T} min"
+        
+        elif agg_op == "avg":
+            avg_val = sum(getattr(t, field, 0) for t in recent) / len(recent)
+            if agg_value is not None and avg_val >= agg_value:
+                return True, f"Average {field} {avg_val:.2f} >= {agg_value} in last {T} min"
+    
+    elif pattern_type == "sequence":
+        sequence_length = params.get("sequence_length", 3)
+        max_interval_minutes = params.get("max_interval_minutes", 2)
+        field = params.get("field", "amount")
+        field_op = params.get("field_operator", ">")
+        field_value = params.get("field_value", 0)
+        
+        user_txs = [t for t in history if t.sender_account == tx.sender_account]
+        user_txs.sort(key=lambda x: x.timestamp)
+        
+        if len(user_txs) < sequence_length:
+            return False, ""
+        
+        for i in range(len(user_txs) - sequence_length + 1):
+            sequence = user_txs[i:i + sequence_length]
+            
+            valid_sequence = True
+            for j in range(1, len(sequence)):
+                time_diff = (sequence[j].timestamp - sequence[j-1].timestamp).total_seconds() / 60
+                if time_diff > max_interval_minutes:
+                    valid_sequence = False
+                    break
+            
+            if valid_sequence:
+                field_checks = []
+                for t in sequence:
+                    val = getattr(t, field, 0)
+                    if field_op == ">" and val > field_value:
+                        field_checks.append(True)
+                    elif field_op == ">=" and val >= field_value:
+                        field_checks.append(True)
+                    elif field_op == "<" and val < field_value:
+                        field_checks.append(True)
+                    elif field_op == "<=" and val <= field_value:
+                        field_checks.append(True)
+                    elif field_op == "==" and val == field_value:
+                        field_checks.append(True)
+                    else:
+                        field_checks.append(False)
+                
+                if all(field_checks):
+                    return True, f"Sequence of {sequence_length} tx with {field} {field_op} {field_value}"
+    
     return False, ""
 
 def composite_rule(tx, params, history):
