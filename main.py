@@ -10,7 +10,6 @@ from schemas import TransactionIn, RuleIn
 from worker import queue, Transaction
 from logger import log_event
 
-# -------------------- Инициализация --------------------
 app = FastAPI(title="Fraud Detection System")
 templates = Jinja2Templates(directory="templates")
 ALLOWED_TYPES = ["payment", "withdrawal", "transfer", "deposit"]
