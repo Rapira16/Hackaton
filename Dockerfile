@@ -1,20 +1,17 @@
-# Используем официальный Python образ
+# Используем официальный Python-образ
 FROM python:3.13
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем файлы проекта
-COPY . .
+# Копируем все файлы проекта
+COPY . /app
 
 # Устанавливаем зависимости
-RUN pip install --no-cache-dir fastapi uvicorn[standard] sqlalchemy pydantic jinja2 requests
+RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy pydantic requests jinja2
 
-# Создаем директорию для шаблонов (если она не существует)
-RUN mkdir -p templates
-
-# Экспонируем порт приложения
+# Открываем порт FastAPI
 EXPOSE 8000
 
-# Одноступенчатый запуск приложения
-CMD ["python", "main.py"]
+# Команда запуска приложения
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

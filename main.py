@@ -9,6 +9,7 @@ from models import TransactionDB, RuleDB, RuleHistory
 from schemas import TransactionIn, RuleIn
 from worker import queue, Transaction
 from logger import log_event
+from sqlalchemy.exc import IntegrityError
 
 # -------------------- Инициализация --------------------
 app = FastAPI(title="Fraud Detection System")
@@ -26,7 +27,6 @@ async def create_transaction(payload: TransactionIn):
     if payload.transaction_type not in ALLOWED_TYPES or payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid data")
 
-    # Создаем транзакцию
     tx = Transaction(
         sender_account=payload.sender_account,
         receiver_account=payload.receiver_account,
@@ -34,34 +34,56 @@ async def create_transaction(payload: TransactionIn):
         transaction_type=payload.transaction_type,
     )
 
-    # Проверяем на дубликат correlation_id в БД
     session = SessionLocal()
     try:
+        # 1️⃣ Проверка дубликата в БД
         existing_tx = session.query(TransactionDB).filter(
             TransactionDB.correlation_id == tx.correlation_id
         ).first()
-
         if existing_tx:
             log_event("duplicate_rejected", tx, component="ingest",
-                      extra={"level": "WARN", "reason": "duplicate_correlation_id"})
+                      extra={"level": "WARN", "reason": "duplicate_correlation_id_db"})
             raise HTTPException(
                 status_code=409,
-                detail=f"Transaction with correlation_id {tx.correlation_id} already exists"
+                detail=f"Transaction with correlation_id {tx.correlation_id} already exists in database"
             )
+
+        # 2️⃣ Проверка дубликата в очереди
+        duplicate_in_queue = any(queued_tx.correlation_id == tx.correlation_id for queued_tx in queue)
+        if duplicate_in_queue:
+            log_event("duplicate_rejected", tx, component="ingest",
+                      extra={"level": "WARN", "reason": "duplicate_in_queue"})
+            raise HTTPException(
+                status_code=409,
+                detail=f"Transaction with correlation_id {tx.correlation_id} already in processing queue"
+            )
+
+        # 3️⃣ Предварительная запись в БД для резервирования correlation_id (опционально)
+        # Это позволит ловить IntegrityError сразу здесь
+        temp_record = TransactionDB(
+            correlation_id=tx.correlation_id,
+            sender_account=tx.sender_account,
+            receiver_account=tx.receiver_account,
+            amount=tx.amount,
+            transaction_type=tx.transaction_type,
+            status="queued",
+            alerts=""
+        )
+        session.add(temp_record)
+        session.commit()
+
+    except IntegrityError as e:
+        session.rollback()
+        log_event("integrity_violation", tx, component="ingest",
+                  extra={"error": str(e), "level": "ERROR", "reason": "duplicate_unique_constraint"})
+        raise HTTPException(
+            status_code=409,
+            detail=f"Duplicate correlation_id detected: {tx.correlation_id}"
+        )
     finally:
         session.close()
 
-    # Проверяем на дубликат в очереди
-    duplicate_in_queue = any(queued_tx.correlation_id == tx.correlation_id for queued_tx in queue)
-    if duplicate_in_queue:
-        log_event("duplicate_rejected", tx, component="ingest",
-                  extra={"level": "WARN", "reason": "duplicate_in_queue"})
-        raise HTTPException(
-            status_code=409,
-            detail=f"Transaction with correlation_id {tx.correlation_id} is already in queue"
-        )
-
-    # Добавляем в очередь
+    # 4️⃣ Добавляем в очередь
     queue.append(tx)
     log_event("queued", tx, component="ingest")
     return {"status": "queued", "correlation_id": tx.correlation_id}
