@@ -1,0 +1,31 @@
+{
+  "feature_names": [
+    "amount",
+    "transaction_type",
+    "merchant_category",
+    "location",
+    "device_used",
+    "time_since_last_transaction",
+    "spending_deviation_score",
+    "velocity_score",
+    "geo_anomaly_score",
+    "payment_channel"
+  ],
+  "numeric_features": [
+    "amount",
+    "time_since_last_transaction",
+    "spending_deviation_score",
+    "velocity_score",
+    "geo_anomaly_score"
+  ],
+  "categorical_features": [
+    "transaction_type",
+    "merchant_category",
+    "location",
+    "device_used",
+    "payment_channel"
+  ],
+  "threshold": 0.5,
+  "target_column": "is_fraud",
+  "timestamp": "2025-10-23T20:59:42.965538"
+}
