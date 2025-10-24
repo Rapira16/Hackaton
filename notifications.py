@@ -1,4 +1,8 @@
-import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import requests, time
+from logger import log_event
 
 def send_telegram_alert(tx, reason):
     bot_token = "7963185721:AAEkRJWokbTdx2W74RBd5UnWnuKY_A4VNyU"
@@ -9,12 +13,7 @@ def send_telegram_alert(tx, reason):
                       data={"chat_id": chat_id, "text": msg})
     except Exception as e:
         print("Telegram error:", e)
-=======
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import requests, time
-from logger import log_event
+
 
 TELEGRAM_BOT_TOKEN = "7963185721:AAEkRJWokbTdx2W74RBd5UnWnuKY_A4VNyU"
 TELEGRAM_CHAT_ID = "1600738086"
@@ -139,4 +138,3 @@ def send_email_alert(tx, reason="New transaction received", retries=3):
                       extra={"attempt": attempt, "error": str(e), "level": "ERROR"})
             if attempt < retries:
                 time.sleep(2)
->>>>>>> Stashed changes
