@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 from models import TransactionDB, RuleDB
 from rules_engine import threshold_rule, pattern_rule, composite_rule, ml_rule
-from notifications import send_telegram_alert
+from notifications import send_telegram_alert, send_email_alert
 from logger import log_event
 
 queue = []  # глобальная очередь транзакций
@@ -76,6 +76,7 @@ def process_transaction(tx: Transaction):
         # Отправка уведомлений
         for reason in alerts:
             send_telegram_alert(tx, reason)
+            send_email_alert(tx, reason)
 
     except IntegrityError as e:
         session.rollback()
