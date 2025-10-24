@@ -11,9 +11,9 @@ queue = []  # глобальная очередь транзакций
 
 
 class Transaction:
-    def __init__(self, sender_account, receiver_account, amount, transaction_type):
+    def __init__(self, sender_account, receiver_account, amount, transaction_type, correlation_id=None):
         import uuid
-        self.correlation_id = str(uuid.uuid4())
+        self.correlation_id = correlation_id if correlation_id else str(uuid.uuid4())
         self.sender_account = sender_account
         self.receiver_account = receiver_account
         self.amount = amount
@@ -50,19 +50,24 @@ def process_transaction(tx: Transaction):
 
         # Применяем правила
         for rule in db_rules:
-            params = json.loads(rule.params)
-            if rule.rule_type == "threshold":
-                alert, reason = threshold_rule(tx, params)
-            elif rule.rule_type == "pattern":
-                alert, reason = pattern_rule(tx, params, history_transactions)
-            elif rule.rule_type == "composite":
-                alert, reason = composite_rule(tx, params, history_transactions)
-            elif rule.rule_type == "ml":
-                alert, reason = ml_rule(tx, params)
-            else:
+            try:
+                params = json.loads(rule.params)
+                if rule.rule_type == "threshold":
+                    alert, reason = threshold_rule(tx, params)
+                elif rule.rule_type == "pattern":
+                    alert, reason = pattern_rule(tx, params, history_transactions)
+                elif rule.rule_type == "composite":
+                    alert, reason = composite_rule(tx, params, history_transactions)
+                elif rule.rule_type == "ml":
+                    alert, reason = ml_rule(tx, params)
+                else:
+                    continue
+                if alert:
+                    alerts.append(reason)
+            except Exception as rule_error:
+                log_event("rule_error", tx, component="queue",
+                          extra={"error": str(rule_error), "rule_id": rule.id, "level": "ERROR"})
                 continue
-            if alert:
-                alerts.append(reason)
 
         tx.alerts = alerts
         tx.status = "alerted" if alerts else "processed"
@@ -80,12 +85,18 @@ def process_transaction(tx: Transaction):
 
     except IntegrityError as e:
         session.rollback()
-        log_event("db_integrity_error", tx, component="queue",
-                  extra={"error": str(e), "level": "ERROR", "reason": "duplicate_constraint"})
+        # Более детальная обработка IntegrityError
+        error_msg = str(e).lower()
+        if "unique" in error_msg and "correlation_id" in error_msg:
+            log_event("duplicate_constraint_violation", tx, component="queue",
+                      extra={"error": str(e), "level": "WARN", "reason": "duplicate_correlation_id_constraint"})
+        else:
+            log_event("integrity_error", tx, component="queue",
+                      extra={"error": str(e), "level": "ERROR", "reason": "database_constraint_violation"})
     except Exception as e:
         session.rollback()
         log_event("db_error", tx, component="queue",
-                  extra={"error": str(e), "level": "ERROR"})
+                  extra={"error": str(e), "level": "ERROR", "reason": "unexpected_error"})
     finally:
         session.close()
 

@@ -31,11 +31,22 @@ async def create_transaction(payload: TransactionIn):
         receiver_account=payload.receiver_account,
         amount=payload.amount,
         transaction_type=payload.transaction_type,
+        correlation_id=payload.correlation_id,
     )
 
+    # 1️⃣ Проверка дубликата в очереди (быстрая проверка)
+    duplicate_in_queue = any(queued_tx.correlation_id == tx.correlation_id for queued_tx in queue)
+    if duplicate_in_queue:
+        log_event("duplicate_rejected", tx, component="ingest",
+                  extra={"level": "WARN", "reason": "duplicate_in_queue"})
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transaction with correlation_id {tx.correlation_id} already in processing queue"
+        )
+
+    # 2️⃣ Проверка дубликата в БД
     session = SessionLocal()
     try:
-        # 1️⃣ Проверка дубликата в БД
         existing_tx = session.query(TransactionDB).filter(
             TransactionDB.correlation_id == tx.correlation_id
         ).first()
@@ -46,43 +57,10 @@ async def create_transaction(payload: TransactionIn):
                 status_code=409,
                 detail=f"Transaction with correlation_id {tx.correlation_id} already exists in database"
             )
-
-        # 2️⃣ Проверка дубликата в очереди
-        duplicate_in_queue = any(queued_tx.correlation_id == tx.correlation_id for queued_tx in queue)
-        if duplicate_in_queue:
-            log_event("duplicate_rejected", tx, component="ingest",
-                      extra={"level": "WARN", "reason": "duplicate_in_queue"})
-            raise HTTPException(
-                status_code=409,
-                detail=f"Transaction with correlation_id {tx.correlation_id} already in processing queue"
-            )
-
-        # 3️⃣ Предварительная запись в БД для резервирования correlation_id (опционально)
-        # Это позволит ловить IntegrityError сразу здесь
-        temp_record = TransactionDB(
-            correlation_id=tx.correlation_id,
-            sender_account=tx.sender_account,
-            receiver_account=tx.receiver_account,
-            amount=tx.amount,
-            transaction_type=tx.transaction_type,
-            status="queued",
-            alerts=""
-        )
-        session.add(temp_record)
-        session.commit()
-
-    except IntegrityError as e:
-        session.rollback()
-        log_event("integrity_violation", tx, component="ingest",
-                  extra={"error": str(e), "level": "ERROR", "reason": "duplicate_unique_constraint"})
-        raise HTTPException(
-            status_code=409,
-            detail=f"Duplicate correlation_id detected: {tx.correlation_id}"
-        )
     finally:
         session.close()
 
-    # 4️⃣ Добавляем в очередь
+    # 3️⃣ Добавляем в очередь (обработка дубликатов будет в worker.py)
     queue.append(tx)
     log_event("queued", tx, component="ingest")
     return {"status": "queued", "correlation_id": tx.correlation_id}

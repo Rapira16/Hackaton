@@ -9,6 +9,7 @@ class TransactionIn(BaseModel):
     amount: float = Field(..., gt=0, description="Сумма транзакции, должна быть > 0")
     transaction_type: str = Field(..., description="Тип транзакции: payment, withdrawal, transfer, deposit")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Момент совершения транзакции")
+    correlation_id: str = Field(None, description="Уникальный идентификатор транзакции (опционально, для тестирования)")
 
     # ✅ Проверка формата счетов
     @field_validator("sender_account", "receiver_account")
