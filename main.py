@@ -11,7 +11,6 @@ from worker import queue, Transaction
 from logger import log_event
 from sqlalchemy.exc import IntegrityError
 
-# -------------------- Инициализация --------------------
 app = FastAPI(title="Fraud Detection System")
 templates = Jinja2Templates(directory="templates")
 ALLOWED_TYPES = ["payment", "withdrawal", "transfer", "deposit"]
