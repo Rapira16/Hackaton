@@ -7,7 +7,7 @@ from rules_engine import threshold_rule, pattern_rule, composite_rule, ml_rule
 from notifications import send_telegram_alert
 from logger import log_event
 
-queue = []
+queue = []  # глобальная очередь транзакций
 
 
 class Transaction:
@@ -19,27 +19,36 @@ class Transaction:
         self.amount = amount
         self.transaction_type = transaction_type
         self.timestamp = datetime.utcnow()
-        self.status = "processed"
+        self.status = "processed"  # по умолчанию processed
         self.alerts = []
 
 
-def process_transaction(tx):
+def process_transaction(tx: Transaction):
+    """
+    Обрабатывает транзакцию:
+    - применяет все включенные правила,
+    - обновляет статус и alerts,
+    - сохраняет изменения в БД,
+    - отправляет уведомление Telegram, если нужно.
+    """
     session = SessionLocal()
     try:
-        # Проверяем дубликат еще раз на случай race condition
-        existing_tx = session.query(TransactionDB).filter(
+        # Получаем существующую запись (статус queued)
+        tx_record = session.query(TransactionDB).filter(
             TransactionDB.correlation_id == tx.correlation_id
         ).first()
 
-        if existing_tx:
-            log_event("duplicate_skipped", tx, component="queue",
-                      extra={"level": "WARN", "reason": "duplicate_in_db"})
+        if not tx_record:
+            log_event("tx_not_found_in_db", tx, component="queue", extra={"level": "ERROR"})
             return
 
+        # Получаем правила
         db_rules = session.query(RuleDB).filter(RuleDB.enabled == True).all()
+        # История всех транзакций для pattern/composite
         history_transactions = session.query(TransactionDB).all()
         alerts = []
 
+        # Применяем правила
         for rule in db_rules:
             params = json.loads(rule.params)
             if rule.rule_type == "threshold":
@@ -56,23 +65,15 @@ def process_transaction(tx):
                 alerts.append(reason)
 
         tx.alerts = alerts
-        if alerts:
-            tx.status = "alerted"
+        tx.status = "alerted" if alerts else "processed"
 
-        tx_record = TransactionDB(
-            correlation_id=tx.correlation_id,
-            sender_account=tx.sender_account,
-            receiver_account=tx.receiver_account,
-            amount=tx.amount,
-            transaction_type=tx.transaction_type,
-            timestamp=tx.timestamp,
-            status=tx.status,
-            alerts="; ".join(tx.alerts),
-        )
-        session.add(tx_record)
+        # Обновляем существующую запись
+        tx_record.status = tx.status
+        tx_record.alerts = "; ".join(tx.alerts)
         session.commit()
         log_event("db_commit", tx, component="queue")
 
+        # Отправка уведомлений
         for reason in alerts:
             send_telegram_alert(tx, reason)
 
@@ -89,6 +90,9 @@ def process_transaction(tx):
 
 
 def worker():
+    """
+    Постоянный поток обработки транзакций из очереди.
+    """
     while True:
         if queue:
             tx = queue.pop(0)
@@ -97,4 +101,5 @@ def worker():
         time.sleep(0.1)
 
 
+# Запуск worker в отдельном потоке
 threading.Thread(target=worker, daemon=True).start()
