@@ -294,6 +294,30 @@ async def export_csv():
         headers={"Content-Disposition": "attachment; filename=transactions.csv"}
     )
 
+# Добавляем новые маршруты в main.py
+
+@app.get("/admin/edit_rule/{rule_id}", response_class=HTMLResponse)
+async def edit_rule_page(request: Request, rule_id: str):
+    """Страница редактирования правила."""
+    session = SessionLocal()
+    try:
+        rule = session.query(RuleDB).filter(RuleDB.id == rule_id).first()
+        if not rule:
+            raise HTTPException(status_code=404, detail="Rule not found")
+    finally:
+        session.close()
+    return templates.TemplateResponse("edit_rule.html", {"request": request, "rule": rule})
+
+@app.get("/admin/create_transaction", response_class=HTMLResponse)
+async def create_transaction_page(request: Request):
+    """Страница создания транзакции (альтернатива модальному окну)."""
+    return templates.TemplateResponse("create_transaction.html", {"request": request})
+
+@app.get("/admin/create_rule", response_class=HTMLResponse)
+async def create_rule_page(request: Request):
+    """Страница создания правила (альтернатива модальному окну)."""
+    return templates.TemplateResponse("create_rule.html", {"request": request})
+
 
 # -------------------- Запуск --------------------
 if __name__ == "__main__":

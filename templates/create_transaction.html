@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Transaction</title>
+    <style>
+        .container { max-width: 500px; margin: 40px auto; padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Create New Transaction</h1>
+
+    <form id="transactionForm" onsubmit="submitTransaction(event)">
+        <div class="form-group">
+            <label for="sender_account">Sender Account:</label>
+            <input type="text" id="sender_account" name="sender_account" required
+                   pattern="[A-Z0-9]{5,34}"
+                   placeholder="e.g., ACCOUNT1234567890">
+        </div>
+
+        <div class="form-group">
+            <label for="receiver_account">Receiver Account:</label>
+            <input type="text" id="receiver_account" name="receiver_account" required
+                   pattern="[A-Z0-9]{5,34}"
+                   placeholder="e.g., ACCOUNT9876543210">
+        </div>
+
+        <div class="form-group">
+            <label for="amount">Amount:</label>
+            <input type="number" id="amount" name="amount" step="0.01" min="0.01" required
+                   placeholder="0.00">
+        </div>
+
+        <div class="form-group">
+            <label for="transaction_type">Transaction Type:</label>
+            <select id="transaction_type" name="transaction_type" required>
+                <option value="">Select type</option>
+                <option value="payment">Payment</option>
+                <option value="withdrawal">Withdrawal</option>
+                <option value="transfer">Transfer</option>
+                <option value="deposit">Deposit</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <a href="/admin" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Transaction</button>
+        </div>
+    </form>
+</div>
+
+<script>
+async function submitTransaction(event) {
+    event.preventDefault();
+
+    const formData = new FormData(event.target);
+    const transactionData = {
+        sender_account: formData.get('sender_account'),
+        receiver_account: formData.get('receiver_account'),
+        amount: parseFloat(formData.get('amount')),
+        transaction_type: formData.get('transaction_type')
+    };
+
+    try {
+        const response = await fetch('/transactions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(transactionData)
+        });
+
+        if (response.ok) {
+            alert('Transaction created successfully!');
+            window.location.href = '/admin';
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error creating transaction: ' + error.message);
+    }
+}
+</script>
+</body>
+</html>

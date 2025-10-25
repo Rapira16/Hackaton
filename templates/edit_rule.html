@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Rule</title>
+    <style>
+        .container { max-width: 600px; margin: 20px auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            margin-right: 8px;
+            cursor: pointer;
+            background: #f8f9fa;
+            text-decoration: none;
+            color: black;
+            display: inline-block;
+        }
+        .btn-primary { background: #007bff; color: white; border-color: #007bff; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Edit Rule: {{ rule.name }}</h1>
+
+    <form id="editRuleForm" onsubmit="updateRule(event)">
+        <div class="form-group">
+            <label for="rule_name">Rule Name:</label>
+            <input type="text" id="rule_name" name="name" value="{{ rule.name }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="rule_type">Rule Type:</label>
+            <select id="rule_type" name="rule_type" required onchange="updateRuleParams()">
+                <option value="threshold" {% if rule.rule_type == 'threshold' %}selected{% endif %}>Threshold</option>
+                <option value="pattern" {% if rule.rule_type == 'pattern' %}selected{% endif %}>Pattern</option>
+                <option value="ml" {% if rule.rule_type == 'ml' %}selected{% endif %}>ML-based</option>
+                <option value="composite" {% if rule.rule_type == 'composite' %}selected{% endif %}>Composite</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="rule_enabled">Enabled:</label>
+            <select id="rule_enabled" name="enabled">
+                <option value="true" {% if rule.enabled %}selected{% endif %}>Yes</option>
+                <option value="false" {% if not rule.enabled %}selected{% endif %}>No</option>
+            </select>
+        </div>
+
+        <!-- Параметры правила будут заполняться JavaScript -->
+        <div id="rule_params"></div>
+
+        <div class="form-actions">
+            <a href="/admin" class="btn">Cancel</a>
+            <button type="submit" class="btn btn-primary">Update Rule</button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Загружаем параметры правила при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadRuleParams();
+});
+
+// Загрузка параметров правила
+function loadRuleParams() {
+    const ruleType = '{{ rule.rule_type }}';
+    const params = JSON.parse('{{ rule.params | tojson }}');
+
+    let html = '';
+
+    switch(ruleType) {
+        case 'threshold':
+            html = `
+                <div class="form-group">
+                    <label for="threshold_value">Threshold Value:</label>
+                    <input type="number" id="threshold_value" name="value" step="0.01" min="0"
+                           value="${params.value || 100000}">
+                </div>
+                <div class="form-group">
+                    <label for="threshold_field">Field:</label>
+                    <select id="threshold_field" name="field">
+                        <option value="amount" ${params.field === 'amount' ? 'selected' : ''}>Amount</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="threshold_operator">Operator:</label>
+                    <select id="threshold_operator" name="operator">
+                        <option value=">" ${params.operator === '>' ? 'selected' : ''}>Greater than (>)</option>
+                        <option value=">=" ${params.operator === '>=' ? 'selected' : ''}>Greater than or equal (>=)</option>
+                        <option value="<" ${params.operator === '<' ? 'selected' : ''}>Less than (<)</option>
+                        <option value="<=" ${params.operator === '<=' ? 'selected' : ''}>Less than or equal (<=)</option>
+                        <option value="==" ${params.operator === '==' ? 'selected' : ''}>Equal (==)</option>
+                    </select>
+                </div>
+            `;
+            break;
+
+        case 'pattern':
+            html = `
+                <div class="form-group">
+                    <label for="pattern_count">Transaction Count (N):</label>
+                    <input type="number" id="pattern_count" name="N" min="1"
+                           value="${params.N || 3}">
+                </div>
+                <div class="form-group">
+                    <label for="pattern_minutes">Time Window (minutes):</label>
+                    <input type="number" id="pattern_minutes" name="minutes" min="1"
+                           value="${params.minutes || 5}">
+                </div>
+            `;
+            break;
+
+        case 'ml':
+            html = `
+                <div class="form-group">
+                    <label for="ml_threshold">Probability Threshold:</label>
+                    <input type="number" id="ml_threshold" name="value" step="0.01" min="0" max="1"
+                           value="${params.threshold || 0.8}">
+                </div>
+            `;
+            break;
+
+        case 'composite':
+            html = `
+                <div class="form-group">
+                    <label for="composite_expression">Boolean Expression:</label>
+                    <input type="text" id="composite_expression" name="expression"
+                           value="${params.expression || ''}" style="width: 100%;">
+                    <small>Use rule names with AND, OR, NOT operators and parentheses</small>
+                </div>
+            `;
+            break;
+    }
+
+    document.getElementById('rule_params').innerHTML = html;
+}
+
+function updateRuleParams() {
+    // При изменении типа правила перезагружаем параметры
+    loadRuleParams();
+}
+
+async function updateRule(event) {
+    event.preventDefault();
+
+    const formData = new FormData(event.target);
+    const ruleData = {
+        name: formData.get('name'),
+        rule_type: formData.get('rule_type'),
+        value: parseFloat(formData.get('value')) || 0
+    };
+
+    try {
+        const response = await fetch('/rules/edit/{{ rule.id }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(ruleData)
+        });
+
+        if (response.ok) {
+            alert('Rule updated successfully!');
+            window.location.href = '/admin';
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error updating rule: ' + error.message);
+    }
+}
+</script>
+</body>
+</html>
